@@ -94,10 +94,28 @@ public:
     enum class media_type_t {NONE, TEXT, IMAGE, AUDIO, VIDEO, APPLICATION, MULTIPART, MESSAGE};
 
     /**
+    Comparator for the attributes map based on case insensitivity.
+    **/
+    struct icase_comp_t : public std::less<std::string>
+    {
+        bool operator()(const std::string& lhs, const std::string& rhs) const
+        {
+            return boost::to_lower_copy(lhs) < boost::to_lower_copy(rhs);
+        }
+    };
+
+    /**
+    Attributes map with the custom comparator.
+    **/
+    using attributes_t = std::map<std::string, string_t, icase_comp_t>;
+
+    /**
     Content type.
     **/
-    struct MAILIO_EXPORT content_type_t
+    class MAILIO_EXPORT content_type_t
     {
+    public:
+
         /**
         Charset attribute name.
         **/
@@ -107,21 +125,6 @@ public:
         Boundary attribute name.
         **/
         static const std::string ATTR_BOUNDARY;
-
-        /**
-        Media type attribute.
-        **/
-        media_type_t type;
-
-        /**
-        Media subtype attribute.
-        **/
-        std::string subtype;
-
-        /**
-        Charset attribute.
-        **/
-        std::string charset;
 
         /**
         Initializing the media type to none, subtype and charset to empty strings.
@@ -138,9 +141,19 @@ public:
 
         @param media_type      Media type to set.
         @param media_subtype   Media subtype to set.
-        @param content_charset Charset to set.
+        @param charset         Charset to set.
         **/
-        content_type_t(media_type_t media_type, const std::string& media_subtype, const std::string& content_charset = "");
+        content_type_t(media_type_t media_type, const std::string& media_subtype, const std::string& charset = "");
+
+        /**
+        Initializing the content type with the given media type and subtype.
+
+        @param media_type      Media type to set.
+        @param media_subtype   Media subtype to set.
+        @param attributes      Attributes to be set.
+        @param charset         Charset to set.
+        **/
+        content_type_t(media_type_t media_type, const std::string& media_subtype, const attributes_t& attributes, const std::string& charset = "");
 
         /**
         Assignment operator.
@@ -149,6 +162,66 @@ public:
         @return          Object itself.
         **/
         content_type_t& operator=(const content_type_t& cont_type);
+
+        /**
+        Getting the media type set for the content type.
+        **/
+        media_type_t media_type() const;
+
+        /**
+        Getting the media subtype set for the content type.
+        **/
+        std::string media_subtype() const;
+
+        /**
+        Getting the charset set for the content type.
+        **/
+        string_t charset() const;
+
+        /**
+        Getting the boundary of the mime part.
+
+        @return Boundary of the mime part.
+        **/
+        std::string boundary() const;
+
+        /**
+        Setting the boundary of the mime part.
+
+        @param bound String to be used as the boundary.
+        **/
+        void boundary(const std::string& bound);
+
+        /**
+        Getting the attributes set for the content type.
+        **/
+        attributes_t attributes() const;
+
+        void add_attribute(std::string name, string_t value);
+
+        /**
+        Creating the random boundary for the mime part.
+
+        @return Boundary for the mime part.
+        **/
+        std::string make_boundary() const;
+
+    protected:
+
+        /**
+        Media type attribute.
+        **/
+        media_type_t media_type_;
+
+        /**
+        Media subtype attribute.
+        **/
+        std::string media_subtype_;
+
+        /**
+        Additional attributes.
+        **/
+        attributes_t attributes_;
     };
 
     /**
@@ -277,11 +350,23 @@ public:
     void content_type(media_type_t media_type, const std::string& media_subtype, const std::string& charset = "");
 
     /**
+    Setting the content type.
+
+    @param media_type    Media type to set.
+    @param media_subtype Media subtype to set.
+    @param charset       Charset to set.
+    @param attributes    Content type attributes which are optional.
+    @throw *             `content_type(const content_type_t&)`.
+    **/
+    void content_type(media_type_t media_type, const std::string& media_subtype, const attributes_t& attributes,
+		const std::string& charset = "");
+
+    /**
     Getting the content type.
 
     @return Content type.
     **/
-    content_type_t content_type() const;
+    content_type_t& content_type();
 
     /**
     Setting the content ID.
@@ -437,15 +522,14 @@ public:
     **/
     bool strict_codec_mode() const;
 
-    using header_codec_t = codec::codec_type;
-
-    using attribute_codec_t = codec::codec_type;
+    using header_codec_t = codec::codec_t;
 
     /**
     Setting the headers codec.
 
     @param hdr_codec Codec to set.
     **/
+    [[deprecated]]
     void header_codec(header_codec_t hdr_codec);
 
     /**
@@ -453,39 +537,15 @@ public:
 
     @return Codec set.
     **/
+    [[deprecated]]
     header_codec_t header_codec() const;
-
-    /**
-    Setting the header attributes codec.
-
-    @param attr_codec Codec to set.
-    **/
-    void attribute_codec(attribute_codec_t attr_codec);
-
-    /**
-    Getting the attributes codec.
-
-    @return Codec set.
-    **/
-    attribute_codec_t attribute_codec() const;
 
 protected:
 
     /**
-    Comparator for the attributes map based on case insensitivity.
+    Headers multimap with the custom comparator.
     **/
-    struct attr_comp_t : public std::less<std::string>
-    {
-        bool operator()(const std::string& lhs, const std::string& rhs) const
-        {
-            return boost::to_lower_copy(lhs) < boost::to_lower_copy(rhs);
-        }
-    };
-
-    /**
-    Attributes map with the custom comparator.
-    **/
-    typedef std::map<std::string, string_t, attr_comp_t> attributes_t;
+    using headers_t = std::multimap<std::string, std::string, icase_comp_t>;
 
     /**
     Content type header name.
@@ -827,13 +887,6 @@ protected:
     string_t decode_value_attribute(const std::string& attr_value) const;
 
     /**
-    Creating the random boundary for the mime part.
-
-    @return Boundary for the mime part.
-    **/
-    std::string make_boundary() const;
-
-    /**
     Top level mime type represented as a string.
 
     @param media_type_val Mime type to be converted.
@@ -854,11 +907,6 @@ protected:
     Removing trailing empty lines from the body.
     **/
     void strip_body();
-
-    /**
-    Boundary for the mime part.
-    **/
-    std::string boundary_;
 
     /**
     Mime version, should always be 1.0.
@@ -883,12 +931,8 @@ protected:
     /**
     Codec used for headers.
     **/
+    [[deprecated]]
     header_codec_t header_codec_;
-
-    /**
-    Codec used for header attributes.
-    **/
-    attribute_codec_t attribute_codec_;
 
     /**
     Content type as a pair of top level media type and media subtype.
@@ -960,22 +1004,37 @@ class mime_error : public std::runtime_error
 public:
 
     /**
-    Calling parent constructor.
+    Calling the parent constructor.
 
-    @param msg Error message.
+    @param msg     Error message.
+    @param details Error message details.
     **/
-    explicit mime_error(const std::string& msg) : std::runtime_error(msg)
+    explicit mime_error(const std::string& msg, const std::string& details) : std::runtime_error(msg), details_(details)
     {
     }
 
     /**
-    Calling parent constructor.
 
-    @param msg Error message.
+    @param msg     Error message.
+    @param details Error message details.
     **/
-    explicit mime_error(const char* msg) : std::runtime_error(msg)
+    explicit mime_error(const char* msg, const std::string& details) : std::runtime_error(msg), details_(details)
     {
     }
+
+    /**
+    Gets the error message details.
+
+    @return Detailed error message.
+    **/
+    std::string details() const;
+
+protected:
+
+    /**
+    Error message details which could provide more insights into a problem.
+    **/
+    std::string details_;
 };
 
 

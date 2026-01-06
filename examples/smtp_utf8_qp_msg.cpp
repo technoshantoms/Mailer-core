@@ -3,7 +3,7 @@
 smtp_utf8_qp_msg.cpp
 --------------------
 
-Connects to SMTP server and sends a message with UTF8 content and subject.
+Connects to an SMTP server and sends a message with UTF8 content and subject.
 
 
 Copyright (C) 2016, Tomislav Karastojkovic (http://www.alepho.com).
@@ -20,6 +20,8 @@ copy at http://www.freebsd.org/copyright/freebsd-license.html.
 #include <mailio/smtp.hpp>
 
 
+using mailio::codec;
+using mailio::string_t;
 using mailio::message;
 using mailio::mail_address;
 using mailio::mime;
@@ -36,12 +38,11 @@ int main()
     {
         // create mail message
         message msg;
-        msg.header_codec(message::header_codec_t::BASE64);
-        msg.from(mail_address("mailio library", "mailio@mailserver.com"));// set the correct sender name and address
-        msg.add_recipient(mail_address("mailio library", "mailio@gmail.com"));// set the correct recipent name and address
-        msg.add_recipient(mail_address("mailio library", "mailio@outlook.com"));// add more recipients
-        msg.add_cc_recipient(mail_address("mailio library", "mailio@yahoo.com"));// add CC recipient
-        msg.add_bcc_recipient(mail_address("mailio library", "mailio@zoho.com"));
+        msg.from(mail_address(string_t("mailio library", "ASCII", codec::codec_t::BASE64), "mailio@mailserver.com"));// set the correct sender name and address
+        msg.add_recipient(mail_address(string_t("mailio library", "ASCII", codec::codec_t::BASE64), "mailio@gmail.com"));// set the correct recipent name and address
+        msg.add_recipient(mail_address(string_t("mailio library", "ASCII", codec::codec_t::BASE64), "mailio@outlook.com"));// add more recipients
+        msg.add_cc_recipient(mail_address(string_t("mailio library", "ASCII", codec::codec_t::BASE64), "mailio@yahoo.com"));// add CC recipient
+        msg.add_bcc_recipient(mail_address(string_t("mailio library", "ASCII", codec::codec_t::BASE64), "mailio@zoho.com"));
 
         msg.subject("smtp utf8 quoted printable message");
         // create message in Cyrillic alphabet
@@ -67,6 +68,8 @@ int main()
 
         // use a server with plain (non-SSL) connectivity
         smtp conn("smtp.mailserver.com", 587);
+        conn.ssl_options(std::nullopt);// no SSL settings means no TLS connection
+        conn.start_tls(false);// disable the start tls too
         // modify username/password to use real credentials
         conn.authenticate("mailio@mailserver.com", "mailiopass", smtp::auth_method_t::LOGIN);
         conn.submit(msg);

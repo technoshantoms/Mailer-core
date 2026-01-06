@@ -1,6 +1,15 @@
 
 # mailio #
 
+![C++](https://img.shields.io/badge/C++-17-blue)
+![C++](https://img.shields.io/badge/C++-20-blue)
+[![License](https://img.shields.io/badge/License-MIT-darkgreen)](LICENSE)
+[![Conan Center](https://img.shields.io/conan/v/mailio)](https://conan.io/center/recipes/mailio)
+[![Vcpkg](https://img.shields.io/vcpkg/v/mailio)](https://vcpkg.io/en/package/mailio)
+![FreeBSD](https://img.shields.io/badge/OS-FreeBSD-870000)
+![Linux](https://img.shields.io/badge/OS-Linux-870000)
+![Windows](https://img.shields.io/badge/OS-Windows-870000)
+
 [中文文档](README_zh.md)
 
 *mailio* is a cross platform C++ library for MIME format and SMTP, POP3 and IMAP protocols. It is based on the standard C++ 17 and Boost library.
@@ -9,26 +18,26 @@
 # Examples #
 
 To send a mail, one has to create `message` object and set it's attributes as author, recipient, subject and so on. Then, an SMTP connection
-is created by constructing `smtp` (or `smtps`) class. The message is sent over the connection:
+is created by constructing `smtp` (~~or smtps~~) class. The message is sent over the connection:
 
 ```cpp
 message msg;
 msg.from(mail_address("mailio library", "mailio@gmail.com"));
 msg.add_recipient(mail_address("mailio library", "mailio@gmail.com"));
-msg.subject("smtps simple message");
+msg.subject("smtp simple message");
 msg.content("Hello, World!");
 
-smtps conn("smtp.gmail.com", 587);
-conn.authenticate("mailio@gmail.com", "mailiopass", smtps::auth_method_t::START_TLS);
+smtp conn("smtp.gmail.com", 587);
+conn.authenticate("mailio@gmail.com", "mailiopass", smtp::auth_method_t::LOGIN);
 conn.submit(msg);
 ```
 
 To receive a mail, a `message` object is created to store the received message. Mail can be received over POP3 or IMAP, depending of mail server setup.
-If POP3 is used, then instance of `pop3` (or `pop3s`) class is created and message is fetched:
+If POP3 is used, then instance of `pop3` (~~or pop3s~~) class is created and message is fetched:
 
 ```cpp
-pop3s conn("pop.mail.yahoo.com", 995);
-conn.authenticate("mailio@yahoo.com", "mailiopass", pop3s::auth_method_t::LOGIN);
+pop3 conn("pop.mail.yahoo.com", 110);
+conn.authenticate("mailio@yahoo.com", "mailiopass", pop3::auth_method_t::LOGIN);
 message msg;
 conn.fetch(1, msg);
 ```
@@ -36,7 +45,7 @@ conn.fetch(1, msg);
 Receiving a message over IMAP is analogous. Since IMAP recognizes folders, then one has to be specified, like *inbox*:
 
 ```cpp
-imaps conn("imap.gmail.com", 993);
+imap conn("imap.gmail.com", 143);
 conn.authenticate("mailio@gmail.com", "mailiopass", imap::auth_method_t::LOGIN);
 message msg;
 conn.fetch("inbox", 1, msg);
@@ -57,7 +66,8 @@ generated password for all three protocols.
 *mailio* library is supposed to work on all platforms supporting C++ 17 compiler, Boost 1.81 or newer and CMake build tool. The platforms tested so far are
 Linux, Windows, FreeBSD, MacOS, Cygwin, MinGW and the compilers are Gcc, Microsoft Visual C++ and Clang.
 
-There are two ways to build *mailio*: by cloning the [repo](https://github.com/karastojko/mailio.git) and using Cmake or by using Vcpkg.
+There are several ways to build *mailio*: by cloning the [repo](https://github.com/karastojko/mailio.git) and using Cmake, by using Vcpkg or
+[xmake](https://xmake.io).
 
 
 ## CMake ##
@@ -121,8 +131,10 @@ Tests are not available as an option in this case. Use the CMake way to build th
 
 * Recursive formatter and parser of the MIME message.
 * MIME message recognizes the most common headers like subject, recipients, content type and so on.
-* Encodings that are supported for the message body: Seven bit, Eight bit, Binary, Base64 and Quoted Printable.
-* Subject, attachment and name part of the mail address can be in ASCII or UTF-8 format.
+* Message body encodings that are supported: Seven bit, Eight bit, Binary, Base64 and Quoted Printable.
+* Header encodings that are supported: ASCII, UTF-8, Base64, Quoted Printable.
+* Header attributes encodings that are supported: ASCII, Base64, Quoted Printable, Percent.
+* String charset configurable for headers and their attributes.
 * All media types are recognized, including MIME message embedded within another message.
 * MIME message has configurable line length policy and strict mode for parsing.
 * SMTP implementation with message sending. Both plain and SSL (including START TLS) versions are available.
@@ -131,17 +143,25 @@ Tests are not available as an option in this case. Use the CMake way to build th
   versions are available.
 
 
-# Issues #
+# Issues and improvements #
 
 The library is tested on valid mail servers, so probably there are negative test scenarios that are not covered by the code. In case you find one, please
 contact me. Here is a list of issues known so far and planned to be fixed in the future.
 
 * MIME header attributes not fully implemented.
-* Non-ASCII attachment name is assumed to be UTF-8.
 * IMAP supports only ASCII folder names.
+* IMAP lacks the idle support.
+* Editing parts of a message.
+* IMAP flags.
+* Asynchronous I/O.
+* External initialization of the SSL context.
+* IMAP copy command.
 
 
 # Contributors #
+
+Thanks to all people who contribute to the project by improving the source code, report problems and propose new features. Here is a list from the Git history,
+in case I missed someone please let me know.
 
 * [Trevor Mellon](https://github.com/TrevorMellon): CMake build scripts.
 * [Kira Backes](mailto:kira.backes[at]nrwsoft.de): Fix for correct default message date.
@@ -159,9 +179,17 @@ contact me. Here is a list of issues known so far and planned to be fixed in the
 * [Canyon E](https://github.com/canyone2015): IMAP folder delimiter static variable issue.
 * [ostermal](https://github.com/ostermal): Bug with the horizontal tab in MIME headers.
 * [MRsoymilk](mailto:313958485[at]qq.com): Bug in the sending attachment example.
-* [Don Yihtseu](https://github.com/tsurumi-yizhou): Add Chinese document.
-* [Leonhard Kipp](mailto:Leonhard.Kipp@ppro.com): Proper way to build the shared library. Message formatting options.
+* [Don Yihtseu](https://github.com/tsurumi-yizhou): Add Chinese ReadMe.
+* [Leonhard Kipp](mailto:Leonhard.Kipp[at]ppro.com): Proper way to build the shared library. Message formatting options. Optional message subject.
 * [Orchistro](https://github.com/orchistro): Improving CMake build script.
+* [Abril Rincón Blanco](mailto:git[at]rinconblanco.es): Compilation fix for Clang earlier than the version 14.
+* [yjm6560](https://github.com/yjm6560): Various IMAP bugs.
+* [Hannah Sauermann](mailto:hannah.sauermann[at]seclous.com): Fix for the `stringstream` usage in older standard libraries.
+* [Matheus Gabriel Werny](mailto:matheusgwdl[at]protonmail.com): CMake fixes and improvements.
+* [stitch3210](https://github.com/stitch3210): Case insensitive headers.
+* [Luigi Masdea](luigimasdea0[at]gmail.com): Typo error.
+* [Charlie Wolf](charlie[at]wolf.is): Additional attributes in the content type.
+* [Mateusz Golebiewski](https://github.com/ubinoob1): Fix for EHLO not being sent after STARTTLS.
 
 
 # References #
@@ -171,6 +199,7 @@ contact me. Here is a list of issues known so far and planned to be fixed in the
 * [RFC 2045](http://www.rfc-editor.org/rfc/rfc2045): Multipurpose Internet Mail Extensions (MIME) Part One: Format of Internet Message Bodies
 * [RFC 2046](http://www.rfc-editor.org/rfc/rfc2046): Multipurpose Internet Mail Extensions (MIME) Part Two: Media Types
 * [RFC 2047](http://www.rfc-editor.org/rfc/rfc2047): MIME (Multipurpose Internet Mail Extensions) Part Three: Message Header Extensions for Non-ASCII Text
+* [RFC 2177](http://www.rfc-editor.org/rfc/rfc2177): IMAP4 IDLE command
 * [RFC 2183](http://www.rfc-editor.org/rfc/rfc2183): Communicating Presentation Information in Internet Messages: The Content-Disposition Header Field
 * [RFC 2231](http://www.rfc-editor.org/rfc/rfc2231): MIME Parameter Value and Encoded Word Extensions: Sets, Languages, and Continuations
 * [RFC 2449](http://www.rfc-editor.org/rfc/rfc2449): Extension Mechanism

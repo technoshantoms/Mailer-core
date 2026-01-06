@@ -388,8 +388,9 @@ public:
     Setting the subject.
 
     @param mail_subject Subject to set.
+    @param sub_codec    Codec of the subject to use.
     */
-    void subject(const std::string& mail_subject);
+    void subject(const std::string& mail_subject, codec::codec_t sub_codec = codec::codec_t::ASCII);
 
     /**
     Setting the raw subject.
@@ -404,8 +405,9 @@ public:
     Setting the subject.
 
     @param mail_subject Subject to set.
+    @param sub_codec    Codec of the subject to use.
     */
-    void subject(const std::u8string& mail_subject);
+    void subject(const std::u8string& mail_subject, codec::codec_t sub_codec = codec::codec_t::ASCII);
 
     /**
     Setting the raw subject.
@@ -442,19 +444,6 @@ public:
     @param the_date_time Date, time and zone to set.
     **/
     void date_time(const boost::local_time::local_date_time& mail_dt);
-
-    /**
-    Attaching a file with the given media type.
-
-    @param att_strm Stream to read the attachment.
-    @param att_name Attachment name to set.
-    @param type     Attachment media type to set.
-    @param subtype  Attachment media subtype to set.
-    @throw *        `mime::content_type(const content_type_t&)`, `mime::content_transfer_encoding(content_transfer_encoding_t)`,
-                    `mime::content_disposition(content_disposition_t)`.
-    **/
-    [[deprecated]]
-    void attach(const std::istream& att_strm, const std::string& att_name, media_type_t type, const std::string& subtype);
 
     /**
     Attaching a list of streams.
@@ -511,7 +500,7 @@ public:
 
     @return Message headers.
     **/
-    std::multimap<std::string, std::string> headers() const;
+    const headers_t& headers() const;
 
 protected:
 
@@ -643,9 +632,8 @@ protected:
     Formatting the subject which can be ASCII or UTF-8.
 
     @return Formatted subject.
-    @todo   Folding to be moved into `format_header()`?
     **/
-    string_t format_subject() const;
+    std::string format_subject() const;
 
     /**
     Formatting email date.
@@ -695,7 +683,8 @@ protected:
     @throw message_error Parsing failure of Q encoding.
     @throw *             `q_codec::decode(const string&)`.
     **/
-    std::tuple<std::string, std::string> parse_subject(const std::string& subject);
+    std::tuple<std::string, std::string, codec::codec_t>
+    parse_subject(const std::string& subject);
 
     /**
     Parsing a name part of a mail ASCII or UTF-8 encoded.
@@ -773,35 +762,11 @@ protected:
     /**
     Other headers not included into the known ones.
     **/
-    std::multimap<std::string, std::string> headers_;
+    headers_t headers_;
 };
 
-
-/**
-Exception reported by `message` class.
-**/
-class message_error : public std::runtime_error
-{
-public:
-
-    /**
-    Calling parent constructor.
-
-    @param msg Error message.
-    **/
-    explicit message_error(const std::string& msg) : std::runtime_error(msg)
-    {
-    }
-
-    /**
-    Calling parent constructor.
-
-    @param msg Error message.
-    **/
-    explicit message_error(const char* msg) : std::runtime_error(msg)
-    {
-    }
-};
+[[deprecated]]
+typedef mime_error message_error;
 
 
 } // namespace mailio

@@ -23,6 +23,7 @@ copy at http://www.freebsd.org/copyright/freebsd-license.html.
 #include <tuple>
 #include <stdexcept>
 #include <chrono>
+#include <optional>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/streambuf.hpp>
@@ -37,6 +38,14 @@ namespace mailio
 
 /**
 SMTP client implementation.
+
+The order of connection is prioritized as: start tls, ssl, plain tcp. By default, SMTP tries to connect over start tls. If the start tls is switched off, then it
+connects over ssl. If the ssl is switched off, then it connects over plain tcp.
+
+The start tls needs ssl options to be set so they could be used once the connection is switched from tcp to tls. For that reason, the ssl options are
+internally set to default values, but they can be modified over `ssl_options()`. If a user does not want the start tls, it can turn it off over
+`start_tls(false)`. Turning off the start tls switches SMTP to the ssl connection. In order to switch off ssl completely, it has to be done explicitly by setting
+`ssl_options(std::nullopt)`. With both start tls and ssl switched off, the SMTP connection is plain tcp.
 **/
 class MAILIO_EXPORT smtp
 {
@@ -120,6 +129,22 @@ public:
     **/
     std::string source_hostname() const;
 
+    /**
+    Setting the start TLS option.
+
+    @param is_tls If true, the start TLS option is turned on, otherwise is turned off.
+    **/
+    void start_tls(bool is_tls);
+
+    /**
+    Setting SSL options.
+
+    In case the null is set, then no SSL options is set, meaning that no TLS connection is available.
+
+    @param options SSL options to set.
+    **/
+    void ssl_options(const std::optional<dialog_ssl::ssl_options_t> options = std::nullopt);
+
 protected:
 
     /**
@@ -154,6 +179,14 @@ protected:
     @throw *          `parse_line(const string&)`, `dialog::send(const string&)`, `dialog::receive()`.
     **/
     void ehlo();
+
+    /**
+    Switching to TLS layer.
+
+    @throw smtp_error Start TLS refused by server.
+    @throw *          `parse_line(const string&)`, `ehlo()`, `dialog::send(const string&)`, `dialog::receive()`, `dialog_ssl::to_ssl()`.
+    **/
+    void switch_tls();
 
     /**
     Reading the source hostname.
@@ -218,13 +251,23 @@ protected:
     Dialog to use for send/receive operations.
     **/
     std::shared_ptr<dialog> dlg_;
+
+    /**
+    SSL options to set.
+    **/
+    std::optional<dialog_ssl::ssl_options_t> ssl_options_;
+
+    /**
+    Flag to switch to the TLS.
+    **/
+    bool is_start_tls_;
 };
 
 
 /**
 Secure version of SMTP client.
 **/
-class MAILIO_EXPORT smtps : public smtp
+class MAILIO_DEPRECATED smtps : public smtp
 {
 public:
 
@@ -283,55 +326,41 @@ public:
     @param options SSL options to set.
     **/
     void ssl_options(const dialog_ssl::ssl_options_t& options);
-
-protected:
-
-    /**
-    Switching to TLS layer.
-
-    @throw smtp_error Start TLS refused by server.
-    @throw *          `parse_line(const string&)`, `ehlo()`, `dialog::send(const string&)`, `dialog::receive()`, `switch_to_ssl()`.
-    **/
-    void start_tls();
-
-    /**
-    Replacing a TCP socket with an SSL one.
-
-    @throw * `dialog_ssl::dialog_ssl(dialog&, const ssl_options_t&)`.
-    **/
-    void switch_to_ssl();
-
-    /**
-    SSL options to set.
-    **/
-    dialog_ssl::ssl_options_t ssl_options_;
 };
 
 
 /**
 Error thrown by SMTP client.
 **/
-class smtp_error : public std::runtime_error
+class smtp_error : public dialog_error
 {
 public:
 
     /**
     Calling the parent constructor.
 
-    @param msg Error message.
+    @param msg     Error message.
+    @param details Detailed message.
     **/
-    explicit smtp_error(const std::string& msg) : std::runtime_error(msg)
-    {
-    }
+    smtp_error(const std::string& msg, const std::string& details);
 
     /**
     Calling the parent constructor.
 
-    @param msg Error message.
+    @param msg     Error message.
+    @param details Detailed message.
     **/
-    explicit smtp_error(const char* msg) : std::runtime_error(msg)
-    {
-    }
+    smtp_error(const char* msg, const std::string& details);
+
+    smtp_error(const smtp_error&) = default;
+
+    smtp_error(smtp_error&&) = default;
+
+    ~smtp_error() = default;
+
+    smtp_error& operator=(const smtp_error&) = default;
+
+    smtp_error& operator=(smtp_error&&) = default;
 };
 
 

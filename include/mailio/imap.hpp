@@ -26,6 +26,7 @@ copy at http://www.freebsd.org/copyright/freebsd-license.html.
 #include <string>
 #include <tuple>
 #include <variant>
+#include <optional>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/streambuf.hpp>
@@ -42,6 +43,14 @@ namespace mailio
 
 /**
 IMAP client implementation.
+
+The order of connection is prioritized as: start tls, ssl, plain tcp. By default, IMAP tries to connect over start tls. If the start tls is switched off, then it
+connects over ssl. If the ssl is switched off, then it connects over plain tcp.
+
+The start tls needs ssl options to be set so they could be used once the connection is switched from tcp to tls. For that reason, the ssl options are
+internally set to default values, but they can be modified over `ssl_options()`. If a user does not want the start tls, it can turn it off over
+`start_tls(false)`. Turning off the start tls switches IMAP to the ssl connection. In order to switch off ssl completely, it has to be done explicitly by setting
+`ssl_options(std::nullopt)`. With both start tls and ssl switched off, the IMAP connection is plain tcp.
 **/
 class MAILIO_EXPORT imap
 {
@@ -245,7 +254,7 @@ public:
     Selecting a mailbox.
 
     @param mailbox    Mailbox to select.
-    @param read_only  Flag if the selected mailbox is only readable of also writable.
+    @param read_only  Flag if the selected mailbox is only readable or also writable.
     @return           Mailbox statistics.
     @throw imap_error Selecting mailbox failure.
     @throw imap_error Parsing failure.
@@ -263,13 +272,14 @@ public:
     @param mailbox     Mailbox to fetch from.
     @param message_no  Number of the message to fetch.
     @param msg         Message to store the result.
+    @param is_uid      Using a message uid number instead of a message sequence number.
     @param header_only Flag if only the message header should be fetched.
     @throw imap_error  Fetching message failure.
     @throw imap_error  Parsing failure.
     @throw *           `fetch(const list<messages_range_t>&, map<unsigned long, message>&, bool, bool, codec::line_len_policy_t)`.
     @todo              Add server error messages to exceptions.
     **/
-    void fetch(const std::string& mailbox, unsigned long message_no, message& msg, bool header_only = false);
+    void fetch(const std::string& mailbox, unsigned long message_no, bool is_uid, message& msg, bool header_only = false);
 
     /**
     Fetching a message from an already selected mailbox.
@@ -500,6 +510,20 @@ public:
     bool rename_folder(const std::list<std::string>& old_name, const std::list<std::string>& new_name);
 
     /**
+    Setting the start TLS option.
+
+    @param is_tls If true, the start TLS option is turned on, otherwise is turned off.
+    **/
+    void start_tls(bool is_tls);
+
+    /**
+    Setting SSL options.
+
+    @param options SSL options to set.
+    **/
+    void ssl_options(const std::optional<dialog_ssl::ssl_options_t> options);
+
+    /**
     Determining folder delimiter of a mailbox.
 
     It is required to know the folder delimiter string in case one wants to deal with the folder names as strings.
@@ -626,6 +650,15 @@ protected:
     @todo             Add server error messages to exceptions.
     **/
     std::string connect();
+
+    /**
+    Switching to TLS layer.
+
+    @throw imap_error Bad server response.
+    @throw imap_error Start TLS refused by server.
+    @throw *          `parse_tag_result(const std::string&)`, `dialog::to_ssl()`, `dialog::send(const std::string&)`, `dialog::receive()`.
+    **/
+    void switch_tls();
 
     /**
     Performing an authentication by using the login method.
@@ -775,6 +808,16 @@ protected:
     std::shared_ptr<dialog> dlg_;
 
     /**
+    SSL options to set.
+    **/
+    std::optional<dialog_ssl::ssl_options_t> ssl_options_;
+
+    /**
+    Flag to switch to the TLS.
+    **/
+    bool is_start_tls_;
+
+    /**
     Tag used to identify requests and responses.
     **/
     unsigned tag_;
@@ -885,7 +928,7 @@ protected:
 /**
 Secure version of `imap` class.
 **/
-class MAILIO_EXPORT imaps : public imap
+class MAILIO_DEPRECATED imaps : public imap
 {
 public:
 
@@ -931,7 +974,7 @@ public:
     @param username Username to authenticate.
     @param password Password to authenticate.
     @param method   Authentication method to use.
-    @throw *        `connect()`, `switch_to_ssl()`, `start_tls()`, `auth_login(const std::string&, const std::string&)`.
+    @throw *        `connect()`, `dialog::to_ssl()`, `start_tls()`, `auth_login(const std::string&, const std::string&)`.
     **/
     std::string authenticate(const std::string& username, const std::string& password, auth_method_t method);
 
@@ -941,36 +984,13 @@ public:
     @param options SSL options to set.
     **/
     void ssl_options(const dialog_ssl::ssl_options_t& options);
-
-protected:
-
-    /**
-    Switching to TLS layer.
-
-    @throw imap_error Bad server response.
-    @throw imap_error Start TLS refused by server.
-    @throw *          `parse_tag_result(const std::string&)`, `switch_to_ssl()`, `dialog::send(const std::string&)`, `dialog::receive()`.
-    **/
-    void start_tls();
-
-    /**
-    Replacing a TCP socket with an SSL one.
-
-    @throw * `dialog_ssl::dialog_ssl(dialog&, const ssl_options_t&)`.
-    **/
-    void switch_to_ssl();
-
-    /**
-    SSL options to set.
-    **/
-    dialog_ssl::ssl_options_t ssl_options_;
 };
 
 
 /**
 Error thrown by IMAP client.
 **/
-class imap_error : public std::runtime_error
+class imap_error : public dialog_error
 {
 public:
 
@@ -978,19 +998,27 @@ public:
     Calling parent constructor.
 
     @param msg  Error message.
+    @param details Detailed message.
     **/
-    explicit imap_error(const std::string& msg) : std::runtime_error(msg)
-    {
-    }
+    imap_error(const std::string& msg, const std::string& details);
 
     /**
     Calling parent constructor.
 
     @param msg  Error message.
+    @param details Detailed message.
     **/
-    explicit imap_error(const char* msg) : std::runtime_error(msg)
-    {
-    }
+    explicit imap_error(const char* msg, const std::string& details);
+
+    imap_error(const imap_error&) = default;
+
+    imap_error(imap_error&&) = default;
+
+    ~imap_error() = default;
+
+    imap_error& operator=(const imap_error&) = default;
+
+    imap_error& operator=(imap_error&&) = default;
 };
 
 
